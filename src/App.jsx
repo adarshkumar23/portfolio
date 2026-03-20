@@ -174,24 +174,184 @@ const I = {
   sql: <svg viewBox="0 0 32 32" width="100%" height="100%"><ellipse cx="16" cy="9" rx="10" ry="5" fill="none" stroke={C.amber} strokeWidth="1.5"/><path d="M6 9v14c0 2.8 4.5 5 10 5s10-2.2 10-5V9" fill="none" stroke={C.amber} strokeWidth="1.5"/><path d="M6 16c0 2.8 4.5 5 10 5s10-2.2 10-5" fill="none" stroke={C.amber} strokeWidth="1.5"/></svg>,
 };
 
-// ═══ SKILL ORBIT ═══
+// ═══ RADAR CANVAS (Skills Background) ═══
+function RadarCanvas() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const c = ref.current, ctx = c.getContext("2d"), dpr = window.devicePixelRatio || 1;
+    let w, h;
+    const resize = () => { w = c.parentElement.offsetWidth; h = c.parentElement.offsetHeight; c.width = w * dpr; c.height = h * dpr; c.style.width = w + "px"; c.style.height = h + "px"; ctx.scale(dpr, dpr); };
+    resize(); window.addEventListener("resize", resize);
+    let angle = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      const cx = w / 2, cy = h / 2, maxR = Math.min(w, h) * 0.42;
+      // Concentric rings
+      for (let i = 1; i <= 4; i++) { ctx.beginPath(); ctx.arc(cx, cy, maxR * i / 4, 0, Math.PI * 2); ctx.strokeStyle = `rgba(0,229,255,${0.06})`; ctx.lineWidth = 0.5; ctx.stroke(); }
+      // Cross lines
+      ctx.strokeStyle = "rgba(0,229,255,0.04)"; ctx.lineWidth = 0.5;
+      for (let a = 0; a < Math.PI; a += Math.PI / 6) { ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR); ctx.lineTo(cx - Math.cos(a) * maxR, cy - Math.sin(a) * maxR); ctx.stroke(); }
+      // Radar sweep
+      angle += 0.012;
+      const grad = ctx.createConicalGradient ? null : null;
+      // Sweep trail (manual arc fill)
+      for (let i = 0; i < 40; i++) {
+        const a2 = angle - i * 0.02;
+        const alpha = (1 - i / 40) * 0.12;
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, maxR, a2 - 0.02, a2); ctx.closePath();
+        ctx.fillStyle = `rgba(0,229,255,${alpha})`; ctx.fill();
+      }
+      // Sweep line
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * maxR, cy + Math.sin(angle) * maxR);
+      ctx.strokeStyle = `rgba(0,229,255,0.5)`; ctx.lineWidth = 1.5; ctx.stroke();
+      // Center dot
+      ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,229,255,0.8)`; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0,229,255,0.15)`; ctx.fill();
+      requestAnimationFrame(draw);
+    };
+    const id = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(id); window.removeEventListener("resize", resize); };
+  }, []);
+  return <canvas ref={ref} style={{ position: "absolute", inset: 0, zIndex: 0, opacity: 0.7 }} />;
+}
+
+// ═══ SKILL CARD with animated proficiency bar ═══
+function SkillCard({ skill, color, delay, isVisible }) {
+  const [hov, setHov] = useState(false);
+  const [barWidth, setBarWidth] = useState(0);
+  const profMap = { Expert: 95, Advanced: 78, Intermediate: 60 };
+  const prof = profMap[skill.level] || 50;
+
+  useEffect(() => {
+    if (isVisible) { const t = setTimeout(() => setBarWidth(prof), delay * 1000 + 300); return () => clearTimeout(t); }
+  }, [isVisible, prof, delay]);
+
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} data-h style={{
+      background: hov ? `${color}12` : C.panel, backdropFilter: "blur(16px)",
+      border: `1px solid ${hov ? color + "55" : C.border}`, borderRadius: 12,
+      padding: "16px 18px", cursor: "none", position: "relative", overflow: "hidden",
+      transform: `${hov ? "translateY(-6px) scale(1.03)" : "translateY(0) scale(1)"}`,
+      boxShadow: hov ? `0 15px 40px rgba(0,0,0,0.4), 0 0 25px ${color}20` : "0 4px 16px rgba(0,0,0,0.3)",
+      transition: "all 0.4s cubic-bezier(.4,0,.2,1)",
+      opacity: isVisible ? 1 : 0,
+      transitionDelay: `${delay}s`,
+    }}>
+      {/* Hover glow line at top */}
+      <div style={{ position: "absolute", top: 0, left: "5%", right: "5%", height: 1, background: `linear-gradient(90deg,transparent,${hov ? color : "transparent"},transparent)`, transition: "all 0.4s" }} />
+      {/* Floating particles on hover */}
+      {hov && [0,1,2,3,4].map(i => <div key={i} style={{
+        position: "absolute", width: 3, height: 3, borderRadius: "50%", background: color,
+        left: `${15 + i * 18}%`, bottom: 0, opacity: 0.6,
+        animation: `float-particle ${0.8 + i * 0.2}s ease-out forwards`,
+      }} />)}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 8, background: `${color}15`, border: `1px solid ${color}25`,
+          transform: hov ? "rotate(10deg) scale(1.15)" : "rotate(0deg) scale(1)",
+          transition: "transform 0.4s cubic-bezier(.4,0,.2,1)",
+        }}>{skill.icon}</div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: C.text }}>{skill.name}</div>
+          <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color, letterSpacing: "0.15em", textTransform: "uppercase" }}>{skill.level}</div>
+        </div>
+        <div style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color, textShadow: hov ? `0 0 10px ${color}55` : "none", transition: "all 0.3s" }}>{prof}%</div>
+      </div>
+      {/* Animated proficiency bar */}
+      <div style={{ width: "100%", height: 4, background: "rgba(0,229,255,0.06)", borderRadius: 2, overflow: "hidden", position: "relative" }}>
+        <div style={{
+          height: "100%", borderRadius: 2, width: `${barWidth}%`,
+          background: `linear-gradient(90deg, ${color}, ${color}cc)`,
+          boxShadow: `0 0 10px ${color}44`,
+          transition: "width 1.2s cubic-bezier(.4,0,.2,1)",
+        }} />
+        {/* Scanning light on bar */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, width: "30%", height: "100%",
+          background: `linear-gradient(90deg, transparent, ${color}33, transparent)`,
+          animation: hov ? "scan-bar 1.5s linear infinite" : "none",
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ═══ SKILL ORBIT (Enhanced with trails) ═══
 function SkillOrbit({ skills, radius, speed, color, rev }) {
   const [a, setA] = useState(0), [hov, setHov] = useState(null);
   useEffect(() => { let angle = 0; const tick = () => { if (hov === null) angle += speed; setA(angle); requestAnimationFrame(tick); }; const id = requestAnimationFrame(tick); return () => cancelAnimationFrame(id); }, [speed, hov]);
   return <>
-    <div style={{ position: "absolute", left: "50%", top: "50%", width: radius * 2, height: radius * 2, marginLeft: -radius, marginTop: -radius, borderRadius: "50%", border: `1px solid ${color}15` }} />
+    {/* Dashed orbit ring with rotation */}
+    <div style={{ position: "absolute", left: "50%", top: "50%", width: radius * 2, height: radius * 2, marginLeft: -radius, marginTop: -radius, borderRadius: "50%", border: `1px dashed ${color}18`, animation: `spin-ring ${60 / speed}s linear infinite ${rev ? "reverse" : "normal"}` }} />
     {skills.map((s, i) => {
       const deg = (a * (rev ? -1 : 1)) + (i / skills.length) * 360, rad = deg * Math.PI / 180;
       const x = Math.cos(rad) * radius, y = Math.sin(rad) * radius, isH = hov === i;
-      return <div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} data-h style={{ position: "absolute", left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`, transform: `translate(-50%,-50%) scale(${isH ? 1.4 : 1})`, transition: "transform 0.3s", zIndex: isH ? 50 : 10, cursor: "none" }}>
-        <div style={{ width: isH ? 54 : 42, height: isH ? 54 : 42, borderRadius: isH ? 14 : "50%", display: "flex", alignItems: "center", justifyContent: "center", padding: isH ? 11 : 9, background: isH ? `${color}20` : C.deep, border: `1.5px solid ${isH ? color : color + "33"}`, backdropFilter: "blur(12px)", boxShadow: isH ? `0 0 25px ${color}44,0 0 50px ${color}15` : "none", transition: "all 0.3s" }}>{s.icon}</div>
-        {isH && <div style={{ position: "absolute", top: "calc(100% + 10px)", left: "50%", transform: "translateX(-50%)", background: C.deep, backdropFilter: "blur(24px)", border: `1px solid ${color}33`, borderRadius: 8, padding: "8px 14px", whiteSpace: "nowrap", textAlign: "center", zIndex: 100, boxShadow: `0 10px 30px rgba(0,0,0,0.5)` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#fff" }}>{s.name}</div>
-          <div style={{ fontSize: 9, color, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: "0.15em", marginTop: 2 }}>{s.level}</div>
+      return <div key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} data-h style={{ position: "absolute", left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)`, transform: `translate(-50%,-50%) scale(${isH ? 1.5 : 1})`, transition: "transform 0.35s cubic-bezier(.34,1.56,.64,1)", zIndex: isH ? 50 : 10, cursor: "none" }}>
+        {/* Pulse ring on hover */}
+        {isH && <div style={{ position: "absolute", inset: -8, borderRadius: "50%", border: `1px solid ${color}44`, animation: "ping 1s cubic-bezier(0,0,0.2,1) infinite" }} />}
+        <div style={{
+          width: isH ? 56 : 44, height: isH ? 56 : 44,
+          borderRadius: isH ? 14 : "50%",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: isH ? 12 : 10,
+          background: isH ? `${color}22` : C.deep,
+          border: `1.5px solid ${isH ? color : color + "33"}`,
+          backdropFilter: "blur(12px)",
+          boxShadow: isH ? `0 0 30px ${color}55, 0 0 60px ${color}20, inset 0 0 15px ${color}10` : "none",
+          transition: "all 0.35s cubic-bezier(.34,1.56,.64,1)",
+        }}>{s.icon}</div>
+        {isH && <div style={{
+          position: "absolute", top: "calc(100% + 12px)", left: "50%", transform: "translateX(-50%)",
+          background: "rgba(2,11,24,0.95)", backdropFilter: "blur(24px)",
+          border: `1px solid ${color}44`, borderRadius: 10,
+          padding: "10px 18px", whiteSpace: "nowrap", textAlign: "center", zIndex: 100,
+          boxShadow: `0 12px 40px rgba(0,0,0,0.6), 0 0 15px ${color}15`,
+          animation: "tooltip-in 0.25s ease-out",
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: "#fff" }}>{s.name}</div>
+          <div style={{ fontSize: 9, color, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: "0.15em", marginTop: 3 }}>{s.level}</div>
+          {/* Mini proficiency bar in tooltip */}
+          <div style={{ width: 80, height: 2, background: `${color}22`, borderRadius: 1, margin: "6px auto 0", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${{ Expert: 95, Advanced: 78, Intermediate: 60 }[s.level]}%`, background: color, borderRadius: 1 }} />
+          </div>
         </div>}
       </div>;
     })}
   </>;
+}
+
+// ═══ SKILL GRID VIEW ═══
+function SkillGrid() {
+  const ref = useRef(null), [vis, setVis] = useState(false);
+  useEffect(() => { const o = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVis(true); }, { threshold: 0.1 }); if (ref.current) o.observe(ref.current); return () => o.disconnect(); }, []);
+  const categories = [
+    { name: "Languages", color: C.blue, skills: [{ name: "Python", icon: I.python, level: "Expert" },{ name: "TypeScript", icon: I.ts, level: "Advanced" },{ name: "Kotlin", icon: I.kotlin, level: "Intermediate" },{ name: "SQL", icon: I.sql, level: "Advanced" }] },
+    { name: "ML / AI", color: C.teal, skills: [{ name: "PyTorch", icon: I.pytorch, level: "Expert" },{ name: "TensorFlow", icon: I.tf, level: "Advanced" },{ name: "HuggingFace", icon: I.hf, level: "Expert" },{ name: "OpenAI", icon: I.openai, level: "Expert" },{ name: "LangChain", icon: I.anthropic, level: "Advanced" },{ name: "Anthropic", icon: I.anthropic, level: "Advanced" }] },
+    { name: "Web & Cloud", color: C.neon, skills: [{ name: "React", icon: I.react, level: "Advanced" },{ name: "FastAPI", icon: I.fastapi, level: "Expert" },{ name: "Node.js", icon: I.node, level: "Advanced" },{ name: "AWS", icon: I.aws, level: "Advanced" },{ name: "Docker", icon: I.docker, level: "Advanced" },{ name: "Git", icon: I.git, level: "Expert" },{ name: "PostgreSQL", icon: I.pg, level: "Advanced" },{ name: "MongoDB", icon: I.mongo, level: "Intermediate" }] },
+  ];
+  let globalIdx = 0;
+  return <div ref={ref}>
+    {categories.map((cat, ci) => <div key={ci} style={{ marginBottom: 32 }}>
+      {/* Category header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, opacity: vis ? 1 : 0, transform: vis ? "translateX(0)" : "translateX(-20px)", transition: `all 0.6s cubic-bezier(.4,0,.2,1) ${ci * 0.15}s` }}>
+        <div style={{ width: 10, height: 10, borderRadius: 3, background: cat.color, boxShadow: `0 0 10px ${cat.color}55` }} />
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: cat.color, letterSpacing: "0.1em" }}>{cat.name}</span>
+        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${cat.color}25, transparent)` }} />
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: C.dim }}>{cat.skills.length} SKILLS</span>
+      </div>
+      {/* Cards grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 240px), 1fr))", gap: 10 }}>
+        {cat.skills.map((skill, si) => {
+          const idx = globalIdx++;
+          return <SkillCard key={si} skill={skill} color={cat.color} delay={idx * 0.06} isVisible={vis} />;
+        })}
+      </div>
+    </div>)}
+  </div>;
 }
 
 // ═══ DATA ═══
@@ -242,6 +402,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false), [show, setShow] = useState(false);
   const mouse = useRef({ x: 0, y: 0 }), [scrolled, setScrolled] = useState(false), [activeNav, setActiveNav] = useState("");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" }), [fErr, setFErr] = useState({}), [fStat, setFStat] = useState("idle");
+  const [skillView, setSkillView] = useState("orbit");
 
   useEffect(() => { if (loaded) setTimeout(() => setShow(true), 200); }, [loaded]);
   useEffect(() => { const f = () => setScrolled(window.scrollY > 50); window.addEventListener("scroll", f); return () => window.removeEventListener("scroll", f); }, []);
@@ -259,6 +420,11 @@ export default function App() {
       @keyframes bounce{0%,100%{transform:translateY(0);opacity:.8}50%{transform:translateY(8px);opacity:.3}}
       @keyframes scan-h{0%{left:-20%}100%{left:100%}}
       @keyframes pulse-core{0%,100%{box-shadow:0 0 20px ${C.glow}0.3)}50%{box-shadow:0 0 40px ${C.glow}0.6),0 0 80px ${C.glow}0.2)}}
+      @keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+      @keyframes tooltip-in{from{opacity:0;transform:translateX(-50%) translateY(6px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
+      @keyframes spin-ring{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+      @keyframes float-particle{0%{transform:translateY(0);opacity:0.6}100%{transform:translateY(-30px);opacity:0}}
+      @keyframes scan-bar{0%{left:-30%}100%{left:100%}}
       html{scroll-behavior:smooth}::selection{background:${C.neon}33;color:#fff}
       ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:${C.abyss}}::-webkit-scrollbar-thumb{background:${C.neon}33;border-radius:2px}
       *{box-sizing:border-box;margin:0;padding:0}
@@ -349,14 +515,31 @@ export default function App() {
         <SR style={{ textAlign: "center", marginBottom: 40 }}>
           <p style={{ fontFamily: mono, color: C.neon, fontSize: 11, letterSpacing: "0.2em", marginBottom: 8 }}>{"// TECH_SONAR"}</p>
           <h2 style={{ fontSize: "clamp(30px,5vw,50px)", fontFamily: "'Syne',sans-serif", fontWeight: 800, color: C.neon, textShadow: `0 0 30px ${C.glow}0.2)` }}>Technologies I Command</h2>
-          <p style={{ fontFamily: mono, fontSize: 10, color: C.dim, marginTop: 8 }}>hover nodes · orbit auto-rotates</p>
+          {/* View Toggle */}
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 16 }}>
+            {["orbit", "grid"].map(v => <button key={v} data-h onClick={() => setSkillView(v)} style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase",
+              padding: "6px 18px", borderRadius: 6, cursor: "none", border: `1px solid ${skillView === v ? C.neon : C.border}`,
+              background: skillView === v ? `${C.neon}15` : "transparent", color: skillView === v ? C.neon : C.dim,
+              transition: "all 0.3s", boxShadow: skillView === v ? `0 0 15px ${C.glow}0.15)` : "none",
+            }}>{v === "orbit" ? "◎ ORBITAL" : "▦ GRID"}</button>)}
+          </div>
         </SR>
-        <SR><div style={{ position: "relative", width: "100%", height: 480, margin: "0 auto" }}>
-          <div style={{ position: "absolute", left: "50%", top: "50%", width: 40, height: 40, marginLeft: -20, marginTop: -20, borderRadius: "50%", background: C.neon, animation: "pulse-core 3s ease-in-out infinite", zIndex: 20 }} />
-          <div style={{ position: "absolute", left: "50%", top: "50%", width: 12, height: 12, marginLeft: -6, marginTop: -6, borderRadius: "50%", background: "#fff", zIndex: 21 }} />
+
+        {/* ORBITAL VIEW */}
+        {skillView === "orbit" && <SR><div style={{ position: "relative", width: "100%", height: 500, margin: "0 auto" }}>
+          <RadarCanvas />
+          <div style={{ position: "absolute", left: "50%", top: "50%", width: 44, height: 44, marginLeft: -22, marginTop: -22, borderRadius: "50%", background: C.neon, animation: "pulse-core 3s ease-in-out infinite", zIndex: 20 }} />
+          <div style={{ position: "absolute", left: "50%", top: "50%", width: 14, height: 14, marginLeft: -7, marginTop: -7, borderRadius: "50%", background: "#fff", zIndex: 21 }} />
           {[{r:88,l:"LANG",c:C.blue},{r:152,l:"ML/AI",c:C.teal},{r:218,l:"INFRA",c:C.neon}].map((o,i) => <div key={i} style={{ position: "absolute", left: "50%", top: `calc(50% - ${o.r}px - 14px)`, transform: "translateX(-50%)", fontFamily: mono, fontSize: 8, color: o.c, letterSpacing: "0.25em", opacity: 0.5, zIndex: 5 }}>{o.l}</div>)}
           {orbits.map((o,i) => <SkillOrbit key={i} {...o} rev={i%2===1} />)}
-        </div></SR>
+          <p style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", fontFamily: mono, fontSize: 9, color: C.dim + "66" }}>hover nodes · orbits auto-rotate · click to pause</p>
+        </div></SR>}
+
+        {/* GRID VIEW with animated cards */}
+        {skillView === "grid" && <SR>
+          <SkillGrid />
+        </SR>}
       </div>
     </section>
 
